@@ -3,6 +3,7 @@
 
 # Project Description
 In this project, we decode the presence/non-presence of whisker stimulation from neural recordings in mice using a simple template matching model that is interpretable. Then we try to compare the decoded stimulus values with mice behavior that was trained on contextual operant conditioning task to see whether we can interpret the decoder outputs as the mouse's perception of stimulus or not.
+For more information please refer to [this presentation]()
 
 Semester project in Labratory of Sensory Processing, EPFL 
 
