@@ -6,9 +6,8 @@ import os.path
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-def threshold_optimizer_for_decoder(stim_presence, perception, timepoints, alpha=0.5):
+def threshold_optimizer_for_decoder(stim_presence, perception, timepoints, beta, DETECTION_WINDOW=0.5): # beta: how much more penalize missing stim over hallucinating stim
     possible_thresholds = np.arange(0, 1, 0.01)
-    timebin = timepoints[1] - timepoints[0]
     stim_presence_times = timepoints[stim_presence]
 
     def compute_decoder_loss(threshold):
@@ -17,10 +16,10 @@ def threshold_optimizer_for_decoder(stim_presence, perception, timepoints, alpha
         perception_subthreshold_mask = ~perception_cross_mask
 
         # Window definitions
-        cross_window_starts = timepoints[perception_cross_mask] - 2 * timebin
+        cross_window_starts = timepoints[perception_cross_mask] - DETECTION_WINDOW
         cross_window_ends = timepoints[perception_cross_mask]
 
-        subthreshold_window_starts = timepoints[perception_subthreshold_mask] - 2 * timebin
+        subthreshold_window_starts = timepoints[perception_subthreshold_mask] - DETECTION_WINDOW
         subthreshold_window_ends = timepoints[perception_subthreshold_mask]
 
         # Calculate false stim counts
@@ -28,15 +27,24 @@ def threshold_optimizer_for_decoder(stim_presence, perception, timepoints, alpha
             not np.any((stim_presence_times >= ws) & (stim_presence_times <= we))
             for ws, we in zip(cross_window_starts, cross_window_ends)
         ])
+        true_stim_count = len(cross_window_starts) - false_stim_count
 
         # Calculate false no-stim counts
         false_nostim_count = np.sum([
             np.any((stim_presence_times >= ws) & (stim_presence_times <= we))
             for ws, we in zip(subthreshold_window_starts, subthreshold_window_ends)
         ])
+        true_nostim_count = len(subthreshold_window_starts) - false_nostim_count
+
 
         # Loss calculation
-        return alpha * false_stim_count + false_nostim_count
+        fp = false_stim_count; fn = false_nostim_count
+        N_neg = false_stim_count + true_nostim_count; N_pos = true_stim_count + false_nostim_count
+        
+        normalized_fp = fp / N_neg if N_neg > 0 else 0
+        normalized_fn = fn / N_pos if N_pos > 0 else 0
+
+        return beta * normalized_fn + normalized_fp
 
     # Parallel processing over thresholds
     losses = Parallel(n_jobs=-1, backend="loky")(
@@ -47,7 +55,7 @@ def threshold_optimizer_for_decoder(stim_presence, perception, timepoints, alpha
     optimal_threshold = possible_thresholds[np.argmin(losses)]
     return optimal_threshold
 
-def threshold_optimizer_for_behavior(lick_response, perception, timepoints, alpha=0.5, RESPONSE_WINDOW=0.5):
+def threshold_optimizer_for_behavior(lick_response, perception, timepoints, beta=0.5, RESPONSE_WINDOW=0.5): # beta: how much more penalize not predicting lick over hallucinating nessicity of lick
     possible_thresholds = np.arange(0, 1, 0.01)
     lick_times = timepoints[lick_response]
 
@@ -64,19 +72,27 @@ def threshold_optimizer_for_behavior(lick_response, perception, timepoints, alph
         lick_window_ends = lick_times
 
         # Wrongly high perception: perception above threshold but no lick in window
-        wrongly_high_perception_count = np.sum([
+        false_high_perception_count = np.sum([
             not np.any((lick_times > ws) & (lick_times <= we))
             for ws, we in zip(cross_window_starts, cross_window_ends)
         ])
+        true_high_perception_count = len(cross_window_starts) - false_high_perception_count
 
         # Wrongly low perception: lick but no perception crossing in preceding window
-        wrongly_low_perception_count = np.sum([
+        false_low_perception_count = np.sum([
             not np.any((perception_cross_times >= ws) & (perception_cross_times < we))
             for ws, we in zip(lick_window_starts, lick_window_ends)
         ])
+        true_low_perception_count = len(lick_window_starts) - false_low_perception_count
 
-        # Compute loss
-        return alpha * wrongly_high_perception_count + wrongly_low_perception_count
+        # Loss calculation
+        fp = false_high_perception_count; fn = false_low_perception_count
+        N_neg = false_high_perception_count + true_low_perception_count; N_pos = true_high_perception_count + false_low_perception_count
+        
+        normalized_fp = fp / N_neg if N_neg > 0 else 0
+        normalized_fn = fn / N_pos if N_pos > 0 else 0
+
+        return beta * normalized_fn + normalized_fp
 
     # Parallelized computation of losses
     losses = Parallel(n_jobs=-1, backend="loky")(
@@ -106,8 +122,8 @@ def calc_optim_thresholds(session_data,sliding_window_length,sliding_window_sep)
         perception = full_perception[timefilt]
         timepoints = full_timepoints[timefilt]
         lick_response = full_lick_response[timefilt]
-        optimized_decoder_thresholds[idx] = threshold_optimizer_for_decoder(stim_presence,perception,timepoints,alpha=0.5)
-        optimized_behavior_thresholds[idx] = threshold_optimizer_for_behavior(lick_response,perception,timepoints,alpha=0.5)
+        optimized_decoder_thresholds[idx] = threshold_optimizer_for_decoder(stim_presence,perception,timepoints,beta=2)
+        optimized_behavior_thresholds[idx] = threshold_optimizer_for_behavior(lick_response,perception,timepoints,beta=2)
     threshold_estim_timepoints = (timefilt_start + timefilt_end)/2
 
 
