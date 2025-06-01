@@ -22,12 +22,15 @@ def modified_cosine(a,b):
     if np.all(a==0) ^ np.all(b==0):
         return 1
     return cosine(a,b)
-        
-def confidence_calc_from_distance(temp_distance:np.ndarray,T:float)->float:
+
+def calc_logits(temp_distance:np.ndarray) -> np.ndarray:
     d_nostim = temp_distance[0]
     d_stim = np.min(temp_distance[1:])
-
     logits = np.array([-d_nostim, -d_stim])
+    return logits
+
+def confidence_calc_from_distance(temp_distance:np.ndarray,T:float)->float:
+    logits = calc_logits(temp_distance)
     exps = np.exp((logits - np.max(logits))/T)
     probs = exps / np.sum(exps)
     return probs[1]
@@ -269,7 +272,7 @@ def find_optimal_threshold(y_true, y_probs):
 
     return best_threshold
 
-def cont_calc(estim_timepoints, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim,parallel_calc=True,n_jobs=-1,):
+def cont_calc(estim_timepoints, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim,progress,parallel_calc=True,n_jobs=-1):
     def cont_calc_iteration(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim):
         extracted_temp = get_template(neural_activity, estim_time, BIN_SIZE, TIME_BOUND, FEATURE_TYPE)
         return confidence_calc_from_distance(temp_matcher.decode_soft(extracted_temp), T_optim)
@@ -277,7 +280,7 @@ def cont_calc(estim_timepoints, temp_matcher, neural_activity, BIN_SIZE, TIME_BO
         with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
             results = parallel(
                 delayed(cont_calc_iteration)(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim)
-                for estim_time in tqdm(estim_timepoints, desc='Processing Estimations')
+                for estim_time in tqdm(estim_timepoints)
             )
         results = np.array(results)
     else:

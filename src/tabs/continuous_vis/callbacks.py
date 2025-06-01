@@ -1,10 +1,11 @@
 RESPONSE_WINDOW = 1
-FIXED_THRESHOLD = 0.6
+# FIXED_THRESHOLD = 0.6
 
 import gradio as gr
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from scipy.signal import savgol_filter
 
 session_data = None
 def load_file(file):
@@ -28,10 +29,10 @@ def format_time(secs,pos):
     seconds = int(secs % 60)
     return f"{minutes}:{seconds:02d}"
 
-def get_wrong_indices(session_data,timefilt,threshold):
-    timepoints = session_data['timepoints'][timefilt]
-    perception = session_data['perception'][timefilt]
-    lick_response = session_data['lick_response'][timefilt]
+def get_wrong_indices(timepoints,perception,lick_response,timefilt,threshold):
+    timepoints = timepoints[timefilt]
+    perception = perception[timefilt]
+    lick_response = lick_response[timefilt]
     threshold = threshold[timefilt]
 
     time_res = timepoints[1]-timepoints[0]
@@ -56,15 +57,16 @@ def get_wrong_indices(session_data,timefilt,threshold):
     # output is bin start times
     return np.array(false_high_perception_times), np.array(false_low_perception_times)
 
-
-def plot_data(start_time, interval, show_fr):
+def plot_data(start_time, interval, show_fr,threshold_type,show_smoothed):
     plotting_range = (start_time, min(start_time + interval, session_data['timepoints'][-1]))  # in sec
     timebin = session_data['timepoints'][1] - session_data['timepoints'][0]
     time_filt = (session_data['timepoints'] >= plotting_range[0]) & (session_data['timepoints'] <= plotting_range[1])
     stim_times = session_data['timepoints'][(session_data['stim_presence'] == True) & time_filt]
     lick_times = session_data['timepoints'][(session_data['lick_response'] == True) & time_filt]
 
-    threshold = np.full(len(session_data['timepoints']), FIXED_THRESHOLD)  # fixed threshold for now
+    match threshold_type:
+        case 'Match with Behavior': threshold = session_data['behavior_thresholds']
+        case 'Optimize Decoding': threshold = session_data['decoder_thresholds']
 
     # Create subplots: one for perception and one for lick responses
     fig, (ax1, ax2) = plt.subplots(
@@ -72,12 +74,19 @@ def plot_data(start_time, interval, show_fr):
     )
 
     # Main plot: Perception
-    ax1.plot(session_data['timepoints'][time_filt], session_data['perception'][time_filt], label='Perception')
+    window_length = int(1//timebin)
+    polyorder = 3
+
+    if show_smoothed:
+        smoothed_perception = savgol_filter(session_data['perception'][time_filt], window_length, polyorder)
+        ax1.plot(session_data['timepoints'][time_filt], smoothed_perception, label='Smoothed Perception')
+    else:
+        ax1.plot(session_data['timepoints'][time_filt], session_data['perception'][time_filt], label='Perception')
     ax1.vlines(x=stim_times, ymin=0, ymax=1, colors='green', linestyles='dashed', label='Stimulus Times')
     ax1.plot(session_data['timepoints'][time_filt], threshold[time_filt], linestyle='--', label='Threshold')
 
     if show_fr:
-        false_high_perception_times, false_low_perception_times = get_wrong_indices(session_data, time_filt, threshold)
+        false_high_perception_times, false_low_perception_times = get_wrong_indices(session_data['timepoints'],session_data['perception'] if not show_smoothed else smoothed_perception,session_data['lick_response'], time_filt, threshold)
         for i in range(0, len(false_high_perception_times)):
             ax1.fill_betweenx([0, 1], false_high_perception_times[i], false_high_perception_times[i] + timebin, color='pink',
                               alpha=0.5, label='Wrongly High Perception' if i == 0 else '')

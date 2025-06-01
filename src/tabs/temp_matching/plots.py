@@ -1,4 +1,4 @@
-from ...utils.temp_matching import normalize_mat_by_row,get_psth_sum
+from ..temp_matching.utils import normalize_mat_by_row,get_psth_sum
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt

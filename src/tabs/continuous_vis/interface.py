@@ -14,9 +14,11 @@ with gr.Blocks() as app:
         with gr.Row():
             start_time_slider = gr.Slider(0, 0, value=0, step=1, label="Start Time (seconds)")
             interval_slider = gr.Slider(0, 100, value=10, step=1, label="Interval (seconds)")
+            threshold_type = gr.Dropdown(choices=['Match with Behavior','Optimize Decoding'],value='Match with Behavior')
 
         with gr.Row():
             show_fr_checkbox = gr.Checkbox(label="Show False Reaction", value=True)
+            show_smoothed_checkbox = gr.Checkbox(label="Use Smoothed Perception", value=False)
             seek2stim_button = gr.Button("Seek to Next Stim Time")
         
         plot_button = gr.Button("Plot")
@@ -37,6 +39,6 @@ with gr.Blocks() as app:
 
     plot_button.click(
         plot_data,
-        inputs=[start_time_slider, interval_slider, show_fr_checkbox],
+        inputs=[start_time_slider, interval_slider, show_fr_checkbox,threshold_type,show_smoothed_checkbox],
         outputs=[plot_output, plot_button]  # Reset button appearance after plotting
     )

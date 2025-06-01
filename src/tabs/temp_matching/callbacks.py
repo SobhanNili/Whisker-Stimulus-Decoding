@@ -1,4 +1,4 @@
-from ...utils.temp_matching import *
+from .utils import *
 from .plots import *
 import gradio as gr
 
@@ -14,7 +14,7 @@ def update_trial_type_count(data_struct,session_idx,trial_type):
     return f'{(trial_results == trial_type).sum()} Trials'
 def toggle_confidence_slider(optimize_threshold):
     return gr.update(interactive=not optimize_threshold)
-def run_analysis(data_struct,session_idx, similarity_metric, time_bound, multi_level,stim_temp_trial_type,nostim_temp_trial_type,bin_size,confidence_threshold,optimize_threshold,show_wrong_labels,feature_type,save_results_indicator,estim_bin_size):
+def run_analysis(data_struct,session_idx, similarity_metric, time_bound, multi_level,stim_temp_trial_type,nostim_temp_trial_type,bin_size,confidence_threshold,optimize_threshold,show_wrong_labels,feature_type,save_results_indicator,estim_bin_size,progress=gr.Progress()):
     # input processing
     SESSION_IDX = session_idx
     SIMILIARITY_METRIC = modified_cosine if similarity_metric == 'cosine' else euclidean
@@ -70,8 +70,10 @@ def run_analysis(data_struct,session_idx, similarity_metric, time_bound, multi_l
     T_optim = optimize_T(TEMPRATURE_CANDIDATES,trial_templates,temp_matcher,stim_amps.astype(bool)) # optimize temprature param
 
     soft_decode_result = np.zeros(trials_count)
+    logits = np.zeros((trials_count,2))
     for trial_idx in range(trials_count):
         sample_distances = temp_matcher.decode_soft(trial_templates[trial_idx,:])
+        logits[trial_idx,:] = calc_logits(sample_distances)
         soft_decode_result[trial_idx] = confidence_calc_from_distance(sample_distances,T_optim)
     if optimize_threshold:
         CONFIDENCE_THRESHOLD = find_optimal_threshold(real_stims_binary,soft_decode_result)
@@ -88,7 +90,7 @@ def run_analysis(data_struct,session_idx, similarity_metric, time_bound, multi_l
         session_time = trial_onsets.max() + 5
         estim_timepoints = np.arange(start=ESTIMATION_BIN,stop=session_time,step=ESTIMATION_BIN)
         cont_estimations = np.zeros_like(estim_timepoints)
-        cont_estimations = cont_calc(estim_timepoints,temp_matcher,neural_activity,BIN_SIZE,TIME_BOUND,FEATURE_TYPE,T_optim,parallel_calc=PARALLEL_RUN,n_jobs=-1)
+        cont_estimations = cont_calc(estim_timepoints,temp_matcher,neural_activity,BIN_SIZE,TIME_BOUND,FEATURE_TYPE,T_optim,progress,parallel_calc=PARALLEL_RUN,n_jobs=-1)
 
         digitized_licktimes = np.digitize(lick_times, estim_timepoints)
         # lick_response = np.bincount(digitized_licktimes, minlength=len(estim_timepoints) - 1) > LICK_RESPONSE_THRESHOLD
@@ -98,7 +100,7 @@ def run_analysis(data_struct,session_idx, similarity_metric, time_bound, multi_l
         stimulus_presence = np.isin(np.arange(len(estim_timepoints) - 1), digitized_trialtimes)
 
         output_filename = os.path.join('outputs',f'continuous_perception.npz')
-        np.savez(output_filename,perception=cont_estimations[:-1],timepoints=estim_timepoints[:-1],lick_response=lick_response,stim_presence=stimulus_presence)
+        np.savez(output_filename,perception=cont_estimations[:-1],timepoints=estim_timepoints[:-1],lick_response=lick_response,stim_presence=stimulus_presence,stim_amps=stim_amps)
 
 
     # gen outputs

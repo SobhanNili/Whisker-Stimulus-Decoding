@@ -11,7 +11,7 @@ PARALLEL_RUN = True
 import gradio as gr
 from gradio_rangeslider import RangeSlider
 from ..temp_matching.callbacks import *
-from ...utils.temp_matching import *
+from .utils import *
 
 data_struct = load_data()
 
