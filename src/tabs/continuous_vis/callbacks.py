@@ -65,8 +65,8 @@ def plot_data(start_time, interval, show_fr,threshold_type,show_smoothed):
     lick_times = session_data['timepoints'][(session_data['lick_response'] == True) & time_filt]
 
     match threshold_type:
-        case 'Match with Behavior': threshold = session_data['behavior_thresholds']
-        case 'Optimize Decoding': threshold = session_data['decoder_thresholds']
+        case 'Match with Behavior': threshold = session_data['behavior_thresholds']; perception = session_data['behavior_perception']
+        case 'Optimize Decoding': threshold = session_data['decoder_thresholds']; perception = session_data['decoder_perception']
 
     # Create subplots: one for perception and one for lick responses
     fig, (ax1, ax2) = plt.subplots(
@@ -78,15 +78,15 @@ def plot_data(start_time, interval, show_fr,threshold_type,show_smoothed):
     polyorder = 3
 
     if show_smoothed:
-        smoothed_perception = savgol_filter(session_data['perception'][time_filt], window_length, polyorder)
+        smoothed_perception = savgol_filter(perception[time_filt], window_length, polyorder)
         ax1.plot(session_data['timepoints'][time_filt], smoothed_perception, label='Smoothed Perception')
     else:
-        ax1.plot(session_data['timepoints'][time_filt], session_data['perception'][time_filt], label='Perception')
+        ax1.plot(session_data['timepoints'][time_filt], perception[time_filt], label='Perception')
     ax1.vlines(x=stim_times, ymin=0, ymax=1, colors='green', linestyles='dashed', label='Stimulus Times')
     ax1.plot(session_data['timepoints'][time_filt], threshold[time_filt], linestyle='--', label='Threshold')
 
     if show_fr:
-        false_high_perception_times, false_low_perception_times = get_wrong_indices(session_data['timepoints'],session_data['perception'] if not show_smoothed else smoothed_perception,session_data['lick_response'], time_filt, threshold)
+        false_high_perception_times, false_low_perception_times = get_wrong_indices(session_data['timepoints'],perception if not show_smoothed else smoothed_perception,session_data['lick_response'], time_filt, threshold)
         for i in range(0, len(false_high_perception_times)):
             ax1.fill_betweenx([0, 1], false_high_perception_times[i], false_high_perception_times[i] + timebin, color='pink',
                               alpha=0.5, label='Wrongly High Perception' if i == 0 else '')

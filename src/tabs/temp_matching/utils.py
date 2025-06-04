@@ -272,20 +272,14 @@ def find_optimal_threshold(y_true, y_probs):
 
     return best_threshold
 
-def cont_calc(estim_timepoints, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim,progress,parallel_calc=True,n_jobs=-1):
-    def cont_calc_iteration(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim):
+def cont_calc(estim_timepoints, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE,progress,n_jobs=-1):
+    def cont_calc_iteration(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE):
         extracted_temp = get_template(neural_activity, estim_time, BIN_SIZE, TIME_BOUND, FEATURE_TYPE)
-        return confidence_calc_from_distance(temp_matcher.decode_soft(extracted_temp), T_optim)
-    if parallel_calc:
-        with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
-            results = parallel(
-                delayed(cont_calc_iteration)(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE, T_optim)
-                for estim_time in tqdm(estim_timepoints)
-            )
-        results = np.array(results)
-    else:
-        results = np.zeros_like(estim_timepoints)
-        for estim_idx,estim_time in tqdm(enumerate(estim_timepoints)):
-            extracted_temp = get_template(neural_activity,estim_time,BIN_SIZE,TIME_BOUND,FEATURE_TYPE)
-            results[estim_idx] = confidence_calc_from_distance(temp_matcher.decode_soft(extracted_temp),T_optim)
+        return calc_logits(temp_matcher.decode_soft(extracted_temp))
+    with Parallel(n_jobs=n_jobs, backend='loky') as parallel:
+        results = parallel(
+            delayed(cont_calc_iteration)(estim_time, temp_matcher, neural_activity, BIN_SIZE, TIME_BOUND, FEATURE_TYPE)
+            for estim_time in tqdm(estim_timepoints)
+        )
+    results = np.array(results)
     return results
