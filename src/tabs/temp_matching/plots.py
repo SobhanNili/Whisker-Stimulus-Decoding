@@ -122,7 +122,7 @@ def generate_psth_plot(stim_amps,template_stim_amps,neural_activity,trial_onsets
         # mark peak!
         ax.scatter(peak_time,peak_value,marker='^',c='orange',zorder=3,label='Peak')
         ax.set_title(f'stim level: {stim_amp}')
-        ax.set_xlabel('time (ms)')
+        ax.set_xlabel('time (sec)')
         ax.legend()
     plt.close()
     return fig

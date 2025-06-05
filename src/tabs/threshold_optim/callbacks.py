@@ -154,8 +154,6 @@ def optimize_parameters(loss_fn, n_epochs=600, lr=0.01):
         loss = loss_fn(T, theta)
         loss.backward()
         optimizer.step()
-        
-    # gc.collect()
     
     return T.item(), theta.item()
 
@@ -300,7 +298,6 @@ def calc_perception_with_behavior_correspondance(perception):
     false_high_perception_count = 0
     true_high_perception_count = 0
     for ws, we in zip(cross_window_starts, cross_window_ends):
-        window_filt = (timepoints >= ws) & (timepoints <= we)
         if not np.any((lick_times > ws) & (lick_times <= we)):
             false_high_perception_count += 1
         else:
@@ -311,18 +308,70 @@ def calc_perception_with_behavior_correspondance(perception):
     false_low_perception_count = 0
     true_low_perception_count= 0
     for ws, we in zip(lick_window_starts, lick_window_ends):
-        window_filt = (timepoints >= ws) & (timepoints <= we)
         if not np.any((perception_cross_times >= ws) & (perception_cross_times < we)):
             false_low_perception_count += 1
         else:
             true_low_perception_count += 1
 
-    results = (true_low_perception_count/len(lick_times),
-            false_low_perception_count/len(lick_times),
-            true_high_perception_count/len(perception_cross_times),
-            false_high_perception_count/len(perception_cross_times))
+    results = (false_low_perception_count/len(lick_times),
+               false_high_perception_count/len(perception_cross_times))
 
-    return [gr.update(value=f'{results[i]:0.2f}') for i in range(4)]
+    return [gr.update(value=f'{results[i]:0.2f}') for i in range(2)]
+
+# def plot_perception_dist_based_on_behavior(): # if the wrong behavior is a result of perception, or perception could've prevented it
+#     # find windows before a wrong lick
+#     # find windows before a non-detected stim
+#     timepoints = session_data['timepoints']
+#     lick_response = session_data['lick_response']
+#     stim_presence = session_data['stim_presence']
+
+#     lick_times = timepoints[lick_response]
+#     stim_times = timepoints[stim_presence]
+
+#     lick_window_starts = lick_times - RESPONSE_WINDOW
+#     lick_window_ends = lick_times
+
+#     stim_window_starts = stim_times
+#     stim_window_ends = stim_times + RESPONSE_WINDOW
+
+#     fig,axes = plt.subplots(2,1,dpi=300,figsize=(12,6),sharex=True,sharey=True)
+#     perception_types = [decoder_perception,behavior_perception]
+#     title_texts = ['Decoder','Behavior']
+#     for i in range(2):
+#         perception = perception_types[i]
+#         wrong_lick_windows_dist = [] # fa
+#         true_lick_window_dist = [] # hit
+#         for ws, we in zip(lick_window_starts, lick_window_ends):
+#             window_filt = (timepoints >= ws) & (timepoints <= we)
+#             perception_window = perception[window_filt]
+#             window_stat = np.max(perception_window)
+#             if not np.any((stim_times > ws) & (stim_times <= we)):
+#                 wrong_lick_windows_dist.append(window_stat)
+#             else:
+#                 true_lick_window_dist.append(window_stat)
+        
+#         wrong_nolick_windows_dist = [] # miss
+#         for ws, we in zip(stim_window_starts, stim_window_ends):
+#             window_filt = (timepoints >= ws) & (timepoints <= we)
+#             perception_window = perception[window_filt]
+#             window_stat = np.max(perception_window)
+#             if not np.any((lick_times > ws) & (lick_times <= we)):
+#                 wrong_nolick_windows_dist.append(window_stat)
+
+#         sns.kdeplot(wrong_lick_windows_dist,ax=axes[i], label="False Alarm")
+#         sns.kdeplot(true_lick_window_dist,ax=axes[i], label="Hit")
+#         sns.kdeplot(wrong_nolick_windows_dist,ax=axes[i], label="Miss")
+
+#         axes[i].set_title(f"{title_texts[i]}-Optimized Perception")
+#         axes[i].legend()
+#         axes[i].set_xlabel("Value")
+#         axes[i].set_ylabel("Density")
+#         axes[i].set_xlim([0,1]) 
+#         axes[i].grid(True) 
+        
+#     plt.suptitle("KDE of Max Perception Surronding Different Behavioral Results")
+
+#     return fig
 
 def plot_perception_dist_based_on_behavior(): # if the wrong behavior is a result of perception, or perception could've prevented it
     # find windows before a wrong lick
@@ -334,13 +383,13 @@ def plot_perception_dist_based_on_behavior(): # if the wrong behavior is a resul
     lick_times = timepoints[lick_response]
     stim_times = timepoints[stim_presence]
 
-    lick_window_starts = lick_times - RESPONSE_WINDOW
+    lick_window_starts = lick_times - 1 # time to get reward
     lick_window_ends = lick_times
 
     stim_window_starts = stim_times
-    stim_window_ends = stim_times + RESPONSE_WINDOW
+    stim_window_ends = stim_times + 0.5 # time that the stim data is still preserved
 
-    fig,axes = plt.subplots(2,1,dpi=300,figsize=(12,6),sharex=True,sharey=True)
+    fig,axes = plt.subplots(2,1,dpi=300,figsize=(10,6),sharex=True,sharey=True)
     perception_types = [decoder_perception,behavior_perception]
     title_texts = ['Decoder','Behavior']
     for i in range(2):
@@ -357,25 +406,30 @@ def plot_perception_dist_based_on_behavior(): # if the wrong behavior is a resul
                 true_lick_window_dist.append(window_stat)
         
         wrong_nolick_windows_dist = [] # miss
+        true_nolick_windows_dist = [] # cr
         for ws, we in zip(stim_window_starts, stim_window_ends):
             window_filt = (timepoints >= ws) & (timepoints <= we)
             perception_window = perception[window_filt]
             window_stat = np.max(perception_window)
             if not np.any((lick_times > ws) & (lick_times <= we)):
                 wrong_nolick_windows_dist.append(window_stat)
+            else:
+                true_nolick_windows_dist.append(window_stat)
 
-        sns.kdeplot(wrong_lick_windows_dist,ax=axes[i], label="False Alarm")
-        sns.kdeplot(true_lick_window_dist,ax=axes[i], label="Hit")
-        sns.kdeplot(wrong_nolick_windows_dist,ax=axes[i], label="Miss")
+        sns.kdeplot(wrong_lick_windows_dist,ax=axes[i], label="Before an extra lick (FA)")
+        sns.kdeplot(true_lick_window_dist,ax=axes[i], label="Before a correct lick (Hit)")
+        sns.kdeplot(wrong_nolick_windows_dist,ax=axes[i], label="After missing a stimulus (Miss)")
+        sns.kdeplot(true_nolick_windows_dist,ax=axes[i], label="Before not licking in catch trials (CR)")
+
 
         axes[i].set_title(f"{title_texts[i]}-Optimized Perception")
-        axes[i].legend()
-        axes[i].set_xlabel("Value")
+        axes[i].legend(loc='upper left')
+        axes[i].set_xlabel("Max Perception in Window")
         axes[i].set_ylabel("Density")
-        axes[i].set_xlim([0,1]) 
+        # axes[i].set_xlim([0,1]) 
         axes[i].grid(True) 
         
-    plt.suptitle("KDE of Max Perception Surronding Different Behavioral Results")
+    plt.suptitle("KDE of Max Perception Surronding Different Behavioral Windows",fontweight='bold')
 
     return fig
 
@@ -443,6 +497,8 @@ def plot_threshold_temp_evo(sliding_window_length,sliding_window_sep,decoding_be
     axes[3].set_ylabel('Optimum Temprature')
     axes[3].set_title('Behavior Matching Optimization')
     axes[3].legend()
+
+    # axes[2].get_shared_y_axes().join(axes[2], axes[3])
 
     # Adjust layout for better spacing
     plt.tight_layout()
